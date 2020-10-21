@@ -7,7 +7,7 @@ import (
 )
 
 // Parallel query by creating a thread for each DB connection
-func (c *Cluster) Select(pre string, post string) ([]Row, error) {
+func (c *Cluster) Select(pre string, post string) (*Rows, error) {
 	query := pre + " from " + c.name + " " + post
 
 	wg := sync.WaitGroup{}
@@ -15,7 +15,12 @@ func (c *Cluster) Select(pre string, post string) ([]Row, error) {
 	errorChan := make(chan error)
 	resultChan := make(chan *sql.Rows)
 
-	res := make([]Row, 0)
+	hasSchema := false
+
+	aggRows := make([]*Row, 0)
+	res := Rows {
+		rows: aggRows,
+	}
 
 	go func() {
 		for {
@@ -29,6 +34,11 @@ func (c *Cluster) Select(pre string, post string) ([]Row, error) {
 			for i := 0; i < chanLen; i++ {
 				rows := <-resultChan
 
+				if !hasSchema {
+					res.columnTypes, _ = rows.ColumnTypes()
+					res.columns, _ = rows.Columns()
+				}
+
 				for rows.Next() {
 					row := Row{}
 
@@ -38,7 +48,7 @@ func (c *Cluster) Select(pre string, post string) ([]Row, error) {
 						return
 					}
 
-					res = append(res, row)
+					aggRows = append(aggRows, &row)
 				}
 			}
 		}
@@ -70,13 +80,19 @@ func (c *Cluster) Select(pre string, post string) ([]Row, error) {
 		return nil, <-errorChan
 	}
 
-	return res, nil
+	return &res, nil
 }
 
-// represents a specific table schema whose parameters we can scan into
+// Row represents a row of a specific table schema whose parameters we can scan into with sql.Rows.Scan
 type Row struct {
 	id    int
 	date  string
 	memo  string
 	topic string
+}
+
+type Rows struct {
+	rows        []*Row
+	columnTypes []*sql.ColumnType
+	columns     []string
 }
