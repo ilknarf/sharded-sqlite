@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-const testDir = "build/test"
+const testDir = "target/test"
 
 func TestNewCluster(t *testing.T) {
 	path := filepath.Join(testDir,"NewCluster")
