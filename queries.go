@@ -1,4 +1,4 @@
-package main
+package sharded
 
 import (
 	"database/sql"
@@ -7,9 +7,7 @@ import (
 )
 
 // Parallel query by creating a thread for each DB connection
-func (c *Cluster) Select(pre string, post string) (*Rows, error) {
-	query := pre + " from " + c.name + " " + post
-
+func (c *ClusterMetadata) Query(query string) (*QueryResult, error) {
 	wg := sync.WaitGroup{}
 
 	errorChan := make(chan error)
@@ -17,40 +15,49 @@ func (c *Cluster) Select(pre string, post string) (*Rows, error) {
 
 	hasSchema := false
 
+	// aggregate rows
 	aggRows := make([]*Row, 0)
-	res := Rows {
+	res := QueryResult{
+		query: query,
 		rows: aggRows,
+	}
+
+	addRows := func() {
+		// make sure that this function completes before returning
+		wg.Add(1)
+		defer wg.Done()
+		// terminate if error exists within top-level
+		if len(errorChan) != 0 {
+			return
+		}
+
+		// adds all rows to result
+		chanLen := len(resultChan)
+		for i := 0; i < chanLen; i++ {
+			rows := <-resultChan
+
+			if !hasSchema {
+				res.columnTypes, _ = rows.ColumnTypes()
+				res.columns, _ = rows.Columns()
+			}
+
+			for rows.Next() {
+				row := Row{}
+
+				err := rows.Scan(&row.id, &row.date, &row.memo, &row.topic)
+				if err != nil {
+					errorChan <- err
+					return
+				}
+
+				aggRows = append(aggRows, &row)
+			}
+		}
 	}
 
 	go func() {
 		for {
-			// terminate if error exists within top-level
-			if len(errorChan) != 0 {
-				return
-			}
-
-			// adds all rows to result
-			chanLen := len(resultChan)
-			for i := 0; i < chanLen; i++ {
-				rows := <-resultChan
-
-				if !hasSchema {
-					res.columnTypes, _ = rows.ColumnTypes()
-					res.columns, _ = rows.Columns()
-				}
-
-				for rows.Next() {
-					row := Row{}
-
-					err := rows.Scan(&row.id, &row.date, &row.memo, &row.topic)
-					if err != nil {
-						errorChan <- err
-						return
-					}
-
-					aggRows = append(aggRows, &row)
-				}
-			}
+			addRows()
 		}
 	}()
 
@@ -83,7 +90,7 @@ func (c *Cluster) Select(pre string, post string) (*Rows, error) {
 	return &res, nil
 }
 
-// Row represents a row of a specific table schema whose parameters we can scan into with sql.Rows.Scan
+// Row represents a row of a specific table schema whose parameters we can scan into with sql.QueryResult.Scan
 type Row struct {
 	id    int
 	date  string
@@ -91,7 +98,9 @@ type Row struct {
 	topic string
 }
 
-type Rows struct {
+// QueryResult represents the result of a query, with relevant metadata
+type QueryResult struct {
+	query       string
 	rows        []*Row
 	columnTypes []*sql.ColumnType
 	columns     []string
