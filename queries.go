@@ -7,7 +7,7 @@ import (
 )
 
 // Parallel query by creating a thread for each DB connection
-func (c *ClusterMetadata) Query(query string) (*QueryResult, error) {
+func (c *Cluster) Query(query string) (*QueryResult, error) {
 	wg := sync.WaitGroup{}
 
 	errorChan := make(chan error)
@@ -62,7 +62,7 @@ func (c *ClusterMetadata) Query(query string) (*QueryResult, error) {
 	}()
 
 	// parallel query execution
-	for _, shard := range c.shards {
+	for _, shard := range c.shardConnections {
 		go func() {
 			if len(errorChan) != 0 {
 				return

@@ -30,7 +30,7 @@ type Cluster struct {
 
 // NewCluster creates a number of SQLite shards with a given createTable statement
 func NewCluster(path string, name string, numShards int, columns int, createTable string) error {
-	if err := os.Mkdir(path, 0777); err != nil {
+	if err := os.MkdirAll(path, 0777); err != nil {
 		return fmt.Errorf("Directory already exists")
 	}
 
