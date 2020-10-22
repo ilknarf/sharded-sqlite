@@ -7,19 +7,15 @@ import (
 )
 
 // Parallel query by creating a thread for each DB connection
-func (c *Cluster) Query(query string) (*QueryResult, error) {
+func (c *Cluster) Query(query string) (*ShardedRows, error) {
 	wg := sync.WaitGroup{}
 
 	errorChan := make(chan error)
 	resultChan := make(chan *sql.Rows)
 
-	hasSchema := false
-
 	// aggregate rows
-	aggRows := make([]*Row, 0)
-	res := QueryResult{
-		query: query,
-		rows: aggRows,
+	res := &ShardedRows{
+		rows: make([]*sql.Rows, 0),
 	}
 
 	addRows := func() {
@@ -36,22 +32,7 @@ func (c *Cluster) Query(query string) (*QueryResult, error) {
 		for i := 0; i < chanLen; i++ {
 			rows := <-resultChan
 
-			if !hasSchema {
-				res.columnTypes, _ = rows.ColumnTypes()
-				res.columns, _ = rows.Columns()
-			}
-
-			for rows.Next() {
-				row := Row{}
-
-				err := rows.Scan(&row.id, &row.date, &row.memo, &row.topic)
-				if err != nil {
-					errorChan <- err
-					return
-				}
-
-				aggRows = append(aggRows, &row)
-			}
+			res.rows = append(res.rows, rows)
 		}
 	}
 
@@ -87,21 +68,14 @@ func (c *Cluster) Query(query string) (*QueryResult, error) {
 		return nil, <-errorChan
 	}
 
-	return &res, nil
+	for i := 0; i < len(resultChan); i++ {
+
+	}
+
+	return res, nil
 }
 
-// Row represents a row of a specific table schema whose parameters we can scan into with sql.QueryResult.Scan
-type Row struct {
-	id    int
-	date  string
-	memo  string
-	topic string
-}
-
-// QueryResult represents the result of a query, with relevant metadata
-type QueryResult struct {
-	query       string
-	rows        []*Row
-	columnTypes []*sql.ColumnType
-	columns     []string
+// ShardedRows abstracts away the multiple *sql.Rows structs that result from parallel queries
+type ShardedRows struct {
+	rows []*sql.Rows
 }
