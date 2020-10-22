@@ -14,7 +14,7 @@ import (
 const metadataCreateTable = "CREATE TABLE metadata (name VARCHAR(255), shard_number INT);"
 const metadataInsertInto = "INSERT INTO metadata VALUES (?, ?);"
 
-// ClusterMetadata is used to
+// ClusterMetadata is used from the JSON representation of a cluster
 type ClusterMetadata struct {
 	Name        string `json:"name"`
 	Path        string `json:"path"`
@@ -68,7 +68,7 @@ func NewCluster(path string, name string, numShards int, columns int, createTabl
 	}
 
 	// write config to JSON
-	shardfilePath := filepath.Join(path, ".shard")
+	shardfilePath := filepath.Join(path, "shardfile")
 
 	f, err := json.Marshal(c)
 	if err != nil {
@@ -83,14 +83,14 @@ func NewCluster(path string, name string, numShards int, columns int, createTabl
 	return nil
 }
 
-// loadCluster loads a sharded database from a directory
+// LoadCluster loads a sharded database from a directory
 func LoadCluster(path string) (*Cluster, error) {
-	shardedPath := filepath.Join(path, ".shard")
+	shardedPath := filepath.Join(path, "shardfile")
 
 	b, err := ioutil.ReadFile(shardedPath)
 
 	if err != nil {
-		return nil, fmt.Errorf("unable to open .shard file in directory")
+		return nil, fmt.Errorf("unable to open shardfile in directory")
 	}
 
 	metadata := ClusterMetadata{}
