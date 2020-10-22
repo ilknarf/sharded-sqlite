@@ -2,6 +2,7 @@ package sharded
 
 import (
 	"database/sql"
+	"fmt"
 	_ "github.com/mattn/go-sqlite3"
 	"sync"
 )
@@ -16,6 +17,7 @@ func (c *Cluster) Query(query string) (*ShardedRows, error) {
 	// aggregate rows
 	res := &ShardedRows{
 		rows: make([]*sql.Rows, 0),
+		curr: 0,
 	}
 
 	addRows := func() {
@@ -27,7 +29,7 @@ func (c *Cluster) Query(query string) (*ShardedRows, error) {
 			return
 		}
 
-		// adds all rows to result
+		// adds rows to result
 		chanLen := len(resultChan)
 		for i := 0; i < chanLen; i++ {
 			rows := <-resultChan
@@ -78,4 +80,29 @@ func (c *Cluster) Query(query string) (*ShardedRows, error) {
 // ShardedRows abstracts away the multiple *sql.Rows structs that result from parallel queries
 type ShardedRows struct {
 	rows []*sql.Rows
+	curr int
+}
+
+// Scan behaves like sql.Rows.Scan with the array of sql.Rows
+func (sr *ShardedRows) Scan(args ...interface{}) error {
+	if sr.curr < len(sr.rows) {
+		return fmt.Errorf("ShardedRows is empty")
+	}
+	c := sr.rows[sr.curr]
+
+	// call original Scan function
+	err := c.Scan(args...)
+
+	return err
+}
+
+// Next checks the slice for rows until either there are either no more values or
+func (sr *ShardedRows) Next() bool {
+	l := len(sr.rows)
+
+	for sr.curr < l && sr.rows[sr.curr].Next() {
+		sr.curr++
+	}
+
+	return sr.curr < l
 }
