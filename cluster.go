@@ -16,12 +16,12 @@ const metadataInsertInto = "INSERT INTO metadata VALUES (?, ?);"
 
 // ClusterMetadata is used from the JSON representation of a cluster
 type ClusterMetadata struct {
-	Name        string `json:"name"`
-	Path        string `json:"path"`
-	NumShards   int    `json:"numShards"`
-	Shards      []string `json:"shards"`
-	Columns     int `json:"columns"`
-	IdIndex     int `json:"idIndex"`
+	TableName  string   `json:"tableName"`
+	Path       string   `json:"path"`
+	NumShards  int      `json:"numShards"`
+	Shards     []string `json:"shards"`
+	NumColumns int      `json:"numColumns"`
+	IdIndex    int      `json:"idIndex"`
 }
 
 type Cluster struct {
@@ -42,12 +42,12 @@ func NewCluster(path string, name string, numShards int, columns int, createTabl
 	}
 
 	c := &ClusterMetadata{
-		Name: name,
-		Path: path,
-		NumShards: numShards,
-		Shards: make([]string, numShards),
-		Columns: columns,
-		IdIndex: idIndex,
+		TableName:  name,
+		Path:       path,
+		NumShards:  numShards,
+		Shards:     make([]string, numShards),
+		NumColumns: columns,
+		IdIndex:    idIndex,
 	}
 
 	// create each shard
@@ -63,7 +63,7 @@ func NewCluster(path string, name string, numShards int, columns int, createTabl
 		db.Exec(createTable)
 		db.Exec(metadataCreateTable)
 		stmt, err := db.Prepare(metadataInsertInto)
-		stmt.Exec(c.Name, i)
+		stmt.Exec(c.TableName, i)
 
 		c.Shards[i] = dbName
 		db.Close()

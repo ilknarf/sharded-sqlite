@@ -7,15 +7,44 @@ import (
 	"sync"
 )
 
+// InsertValue inserts values into the cluster
+func (c *Cluster) InsertValue(args ...interface{}) error {
+	if len(args) != c.metadata.NumColumns {
+		return fmt.Errorf("invalid number of arguments")
+	}
+
+	query := "INSERT INTO " + c.metadata.TableName + " VALUES(?"
+	// concatenate sql query string
+	for i := 1; i < c.metadata.NumColumns; i++ {
+		query += ",?"
+	}
+	query += ");"
+
+	shardIndex, err := c.Hash(args[c.metadata.IdIndex])
+	if err != nil {
+		// unable to hash index
+		return err
+	}
+
+	cluster := c.shardConnections[shardIndex]
+	_, err = cluster.Exec(query, args...)
+
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 // IdQuery executes a single query based on the provided id value
 func (c *Cluster) IndexQuery(query string, idPos int, args ...interface{}) (*sql.Rows, error) {
-	clusterIndex, err := c.Hash(args[idPos])
+	shardIndex, err := c.Hash(args[idPos])
 	if err != nil {
 		// unable to hash index
 		return nil, err
 	}
 
-	cluster := c.shardConnections[clusterIndex]
+	cluster := c.shardConnections[shardIndex]
 
 	rows, err := cluster.Query(query, args...)
 
