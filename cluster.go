@@ -21,6 +21,7 @@ type ClusterMetadata struct {
 	NumShards   int    `json:"numShards"`
 	Shards      []string `json:"shards"`
 	Columns     int `json:"columns"`
+	IdIndex     int `json:"idIndex"`
 }
 
 type Cluster struct {
@@ -29,7 +30,7 @@ type Cluster struct {
 }
 
 // NewCluster creates a number of SQLite shards with a given createTable statement
-func NewCluster(path string, name string, numShards int, columns int, createTable string) error {
+func NewCluster(path string, name string, numShards int, columns int, createTable string, idIndex int) error {
 	if err := os.MkdirAll(path, 0777); err != nil {
 		return fmt.Errorf("Directory already exists")
 	}
@@ -46,6 +47,7 @@ func NewCluster(path string, name string, numShards int, columns int, createTabl
 		NumShards: numShards,
 		Shards: make([]string, numShards),
 		Columns: columns,
+		IdIndex: idIndex,
 	}
 
 	// create each shard

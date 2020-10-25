@@ -13,7 +13,7 @@ func TestNewCluster(t *testing.T) {
 	defer os.RemoveAll(path)
 
 	query := "CREATE TABLE t1 (c1 INT, c2 INT, c3 VARCHAR(255), c4 INT);"
-	err := NewCluster(path, "testtable", 4, 4, query)
+	err := NewCluster(path, "testtable", 4, 4, query, 0)
 
 	if err != nil {
 		t.Error(err)
@@ -25,7 +25,7 @@ func TestLoadCluster(t *testing.T) {
 	defer os.RemoveAll(path)
 
 	query := "CREATE TABLE t1 (c1 INT, c2 INT, c3 VARCHAR(255), c4 INT);"
-	err := NewCluster(path, "testtable", 4, 4, query)
+	err := NewCluster(path, "testtable", 4, 4, query, 0)
 
 	if err != nil {
 		t.Error(err)

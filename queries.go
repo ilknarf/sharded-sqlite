@@ -7,8 +7,28 @@ import (
 	"sync"
 )
 
-// Parallel query by creating a thread for each DB connection
-func (c *Cluster) Query(query string) (*ShardedRows, error) {
+// IdQuery executes a single query based on the provided id value
+func (c *Cluster) IndexQuery(query string, idPos int, args ...interface{}) (*sql.Rows, error) {
+	clusterIndex, err := c.Hash(args[idPos])
+	if err != nil {
+		// unable to hash index
+		return nil, err
+	}
+
+	cluster := c.shardConnections[clusterIndex]
+
+	rows, err := cluster.Query(query, args...)
+
+	if err != nil {
+		// failed query
+		return nil, err
+	}
+
+	return rows, nil
+}
+
+// ParallelQuery executes a parallel query by creating a thread for each DB connection
+func (c *Cluster) ParallelQuery(query string) (*ShardedRows, error) {
 	wg := sync.WaitGroup{}
 
 	errorChan := make(chan error)
