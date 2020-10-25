@@ -36,16 +36,16 @@ func (c *Cluster) InsertFullValue(args ...interface{}) error {
 	return nil
 }
 
-func (c *Cluster) InsertValue(query string, idIndex int, args ...interface{}) (sql.Result, error) {
+func (c *Cluster) InsertValue(query string, idIndex int, args ...interface{}) error {
 	shardIndex, err := c.Hash(args[idIndex])
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	shard := c.shardConnections[shardIndex]
-	res, err := shard.Exec(query, args)
+	_, err = shard.Exec(query, args...)
 
-	return res, err
+	return err
 }
 
 // IdQuery executes a single query based on the provided id value
