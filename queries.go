@@ -7,13 +7,13 @@ import (
 	"sync"
 )
 
-// InsertValue inserts values into the cluster
-func (c *Cluster) InsertValue(args ...interface{}) error {
+// InsertFullValue inserts full values into the cluster
+func (c *Cluster) InsertFullValue(args ...interface{}) error {
 	if len(args) != c.metadata.NumColumns {
 		return fmt.Errorf("invalid number of arguments")
 	}
 
-	query := "INSERT INTO " + c.metadata.TableName + " VALUES(?"
+	query := "INSERT INTO " + c.metadata.TableName + " VALUES (?"
 	// concatenate sql query string
 	for i := 1; i < c.metadata.NumColumns; i++ {
 		query += ",?"
@@ -26,14 +26,26 @@ func (c *Cluster) InsertValue(args ...interface{}) error {
 		return err
 	}
 
-	cluster := c.shardConnections[shardIndex]
-	_, err = cluster.Exec(query, args...)
+	shard := c.shardConnections[shardIndex]
+	_, err = shard.Exec(query, args...)
 
 	if err != nil {
 		return err
 	}
 
 	return nil
+}
+
+func (c *Cluster) InsertValue(query string, idIndex int, args ...interface{}) (sql.Result, error) {
+	shardIndex, err := c.Hash(args[idIndex])
+	if err != nil {
+		return nil, err
+	}
+
+	shard := c.shardConnections[shardIndex]
+	res, err := shard.Exec(query, args)
+
+	return res, err
 }
 
 // IdQuery executes a single query based on the provided id value
@@ -44,9 +56,9 @@ func (c *Cluster) IndexQuery(query string, idPos int, args ...interface{}) (*sql
 		return nil, err
 	}
 
-	cluster := c.shardConnections[shardIndex]
+	shard := c.shardConnections[shardIndex]
 
-	rows, err := cluster.Query(query, args...)
+	rows, err := shard.Query(query, args...)
 
 	if err != nil {
 		// failed query
