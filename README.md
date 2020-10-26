@@ -49,4 +49,5 @@ func ExampleShard() error {
 }
 ```
 
-For simplification, this 
+For simplification, this implementation requires manual specification of index value coordinates.
+A real-world implementation might utilize query parsing for optimizations and hashing.
