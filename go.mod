@@ -1,4 +1,4 @@
-module sharded-sqlite
+module github.com/ilknarf/sharded-sqlite
 
 go 1.13
 
