@@ -70,10 +70,10 @@ func (c *Cluster) IndexQuery(query string, idPos int, args ...interface{}) (*sql
 
 // ParallelQuery executes a parallel query by creating a thread for each DB connection
 func (c *Cluster) ParallelQuery(query string) (*ShardedRows, error) {
-	wg := sync.WaitGroup{}
+	wg := &sync.WaitGroup{}
 
-	errorChan := make(chan error)
-	resultChan := make(chan *sql.Rows)
+	errorChan := make(chan error, c.metadata.NumShards)
+	resultChan := make(chan *sql.Rows, c.metadata.NumShards)
 
 	// aggregate rows
 	res := &ShardedRows{
@@ -81,40 +81,18 @@ func (c *Cluster) ParallelQuery(query string) (*ShardedRows, error) {
 		curr: 0,
 	}
 
-	addRows := func() {
-		// make sure that this function completes before returning
-		wg.Add(1)
-		defer wg.Done()
-		// terminate if error exists within top-level
-		if len(errorChan) != 0 {
-			return
-		}
-
-		// adds rows to result
-		chanLen := len(resultChan)
-		for i := 0; i < chanLen; i++ {
-			rows := <-resultChan
-
-			res.rows = append(res.rows, rows)
-		}
-	}
-
-	go func() {
-		for {
-			addRows()
-		}
-	}()
-
 	// parallel query execution
-	for _, shard := range c.shardConnections {
-		go func() {
+	for i, shard := range c.shardConnections {
+		wg.Add(1)
+		go func(i int, shard *sql.DB) {
+			defer wg.Done()
+
 			if len(errorChan) != 0 {
 				return
 			}
-			wg.Add(1)
-			defer wg.Done()
 
 			res, err := shard.Query(query)
+
 			if err != nil {
 				errorChan <- err
 				return
@@ -122,7 +100,7 @@ func (c *Cluster) ParallelQuery(query string) (*ShardedRows, error) {
 
 			// send rows to result channel
 			resultChan <- res
-		}()
+		}(i, shard)
 	}
 
 	wg.Wait()
@@ -131,8 +109,9 @@ func (c *Cluster) ParallelQuery(query string) (*ShardedRows, error) {
 		return nil, <-errorChan
 	}
 
-	for i := 0; i < len(resultChan); i++ {
-
+	for len(resultChan) != 0 {
+		n := <-resultChan
+		res.rows = append(res.rows, n)
 	}
 
 	return res, nil
@@ -142,28 +121,34 @@ func (c *Cluster) ParallelQuery(query string) (*ShardedRows, error) {
 type ShardedRows struct {
 	rows []*sql.Rows
 	curr int
+	prepared bool
 }
 
 // Scan behaves like sql.Rows.Scan with the array of sql.Rows
 func (sr *ShardedRows) Scan(args ...interface{}) error {
-	if sr.curr < len(sr.rows) {
-		return fmt.Errorf("ShardedRows is empty")
+	if !sr.prepared {
+		return fmt.Errorf("Scan called before Next")
 	}
-	c := sr.rows[sr.curr]
 
+	if sr.curr >= len(sr.rows) {
+		return fmt.Errorf("No more rows left in ShardedRows")
+	}
 	// call original Scan function
-	err := c.Scan(args...)
-
-	return err
+	return sr.rows[sr.curr].Scan(args...)
 }
 
 // Next checks the slice for rows until either there are either no more values or
 func (sr *ShardedRows) Next() bool {
 	l := len(sr.rows)
 
-	for sr.curr < l && sr.rows[sr.curr].Next() {
+	for sr.curr < l && !sr.rows[sr.curr].Next() {
 		sr.curr++
 	}
 
-	return sr.curr < l
+	if sr.curr < l {
+		sr.prepared = true
+		return true
+	}
+
+	return false
 }
